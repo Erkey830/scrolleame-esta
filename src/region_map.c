@@ -118,6 +118,8 @@ static void CB_HandleFlyMapInput(void);
 static void CB_ExitFlyMap(void);
 static void Task_scroll_right(u8 taskId);
 static void Task_scroll_left(u8 taskId);
+static void Task_scroll_down(u8 taskId);
+static void Task_scroll_up(u8 taskId);
 
 static const u16 sRegionMapCursorPal[] = INCBIN_U16("graphics/pokenav/region_map/cursor.gbapal");
 static const u32 sRegionMapCursorSmallGfxLZ[] = INCBIN_U32("graphics/pokenav/region_map/cursor_small.4bpp.lz");
@@ -591,7 +593,7 @@ bool8 LoadRegionMapGfx(void)
         else
         {
             sRegionMap->scrollX = (sRegionMap->cursorPosX + (GetGpuReg(REG_OFFSET_BG2X_L)/0x800) )* 8 - 0x34;
-            sRegionMap->scrollY = sRegionMap->cursorPosY * 8 - 0x44;
+            sRegionMap->scrollY = (sRegionMap->cursorPosY + (GetGpuReg(REG_OFFSET_BG2Y_L)/0x800) )* 8 - 0x44;
             sRegionMap->zoomedCursorPosX = sRegionMap->cursorPosX;
             sRegionMap->zoomedCursorPosY = sRegionMap->cursorPosY;
             CalcZoomScrollParams(sRegionMap->scrollX, sRegionMap->scrollY, 0x38, 0x48, 0x80, 0x80, 0);
@@ -674,6 +676,30 @@ static void Task_scroll_left(u8 taskId)
     }
 }
 
+static void Task_scroll_down(u8 taskId)
+{
+    gTasks[taskId].tnumberOfPlays += 1;
+    SetGpuReg(REG_OFFSET_BG2Y_L, GetGpuReg(REG_OFFSET_BG2Y_L) + 0x0F00);
+    sRegionMap->playerIconSprite->y += 15;
+    if (gTasks[taskId].tnumberOfPlays == 8)
+    {
+        DestroyTask(taskId);
+
+    }
+}
+
+static void Task_scroll_up(u8 taskId)
+{
+    gTasks[taskId].tnumberOfPlays += 1;
+    SetGpuReg(REG_OFFSET_BG2Y_L, GetGpuReg(REG_OFFSET_BG2Y_L) - 0x0F00);
+    sRegionMap->playerIconSprite->y -= 15;
+    if (gTasks[taskId].tnumberOfPlays == 8)
+    {
+        DestroyTask(taskId);
+
+    }
+}
+
 static u8 ProcessRegionMapInput_Full(void)
 {
     u8 input;
@@ -711,6 +737,18 @@ static u8 ProcessRegionMapInput_Full(void)
         if (JOY_HELD(DPAD_LEFT) && sRegionMap->cursorPosX <= MAPCURSOR_X_MIN && GetGpuReg(REG_OFFSET_BG2X_L) > 0x0000 && GetGpuReg(REG_OFFSET_BG2X_L) % 0x7800 == 0)
     {
         taskId = CreateTask(Task_scroll_left, 1);
+        gTasks[taskId].tnumberOfPlays = 0;
+        input = MAP_INPUT_MOVE_START;
+    }
+    if (JOY_HELD(DPAD_DOWN) && sRegionMap->cursorPosY >= MAPCURSOR_Y_MAX && GetGpuReg(REG_OFFSET_BG2Y_L) < 0xF000 && GetGpuReg(REG_OFFSET_BG2Y_L) % 0x7800 == 0)
+    {
+        taskId = CreateTask(Task_scroll_down, 1);
+        gTasks[taskId].tnumberOfPlays = 0;
+        input = MAP_INPUT_MOVE_START;
+    }
+        if (JOY_HELD(DPAD_UP) && sRegionMap->cursorPosY <= MAPCURSOR_Y_MIN && GetGpuReg(REG_OFFSET_BG2Y_L) > 0x0000 && GetGpuReg(REG_OFFSET_BG2Y_L) % 0x7800 == 0)
+    {
+        taskId = CreateTask(Task_scroll_up, 1);
         gTasks[taskId].tnumberOfPlays = 0;
         input = MAP_INPUT_MOVE_START;
     }
@@ -778,7 +816,7 @@ static u8 ProcessRegionMapInput_Zoomed(void)
         sRegionMap->zoomedCursorDeltaY = -1;
         input = MAP_INPUT_MOVE_START;
     }
-    if (JOY_HELD(DPAD_DOWN) && sRegionMap->scrollY < 0x3c)
+    if (JOY_HELD(DPAD_DOWN) && sRegionMap->scrollY < 0x279)
     {
         sRegionMap->zoomedCursorDeltaY = +1;
         input = MAP_INPUT_MOVE_START;
@@ -1002,7 +1040,15 @@ static u16 GetMapSecIdAt(u16 x, u16 y)
     {
         return MAPSEC_NONE;
     }
-    y -= MAPCURSOR_Y_MIN;
+    y += (GetGpuReg(REG_OFFSET_BG2Y_L)/0x800) - MAPCURSOR_Y_MIN ;
+    if (y <= 14)
+    {
+        return sRegionMap_MapSectionLayout[y][x];
+    }
+    else
+    {
+        return sRegionMap_MapSectionLayoutJohto[y - 14][x];
+    }
     x += (GetGpuReg(REG_OFFSET_BG2X_L)/0x800) - MAPCURSOR_X_MIN ;
     if (x <= 27)
     {
@@ -1902,7 +1948,7 @@ static void CreateFlyDestIcons(void)
     {
         GetMapSecDimensions(mapSecId, &x, &y, &width, &height);
         x = (x + MAPCURSOR_X_MIN - (GetGpuReg(REG_OFFSET_BG2X_L)/0x800)) * 8 + 4;
-        y = (y + MAPCURSOR_Y_MIN) * 8 + 4;
+        y = (y + MAPCURSOR_Y_MIN - (GetGpuReg(REG_OFFSET_BG2Y_L)/0x800)) * 8 + 4;
 
         if (width == 2)
             shape = SPRITE_SHAPE(16x8);
